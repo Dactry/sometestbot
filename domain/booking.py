@@ -1,5 +1,8 @@
+from dataclasses import dataclass
+
+
+@dataclass
 class Booking:
-    def __init__(self, user_name: str, date: str, time: str):
-        self.user_name = user_name
-        self.date = date
-        self.time = time
+    user_id: int
+    date: str
+    times: list[str]

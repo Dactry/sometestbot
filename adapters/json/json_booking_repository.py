@@ -11,10 +11,10 @@ from ports.bookings_port import BookingRepository
 
 
 class RawBooking(TypedDict):
-    booking_id: int
     user_id: int
     date: str
     times: list[str]
+    id: int
 
 
 class RawUser(TypedDict):
@@ -144,7 +144,7 @@ class JsonBookingRepository(BookingRepository):
             else:
                 sorted_list.append(
                     {
-                        "booking_id": data_booking["booking_id"],
+                        "id": data_booking["id"],
                         "user_id": data_booking["user_id"],
                         "date": data_booking["date"],
                         "times": list(data_booking["times"]),
@@ -159,42 +159,37 @@ class JsonBookingRepository(BookingRepository):
             booking_list.append(
                 (
                     list_item["user_id"],
-                    Booking(
-                        list_item["user_id"],
-                        list_item["date"],
-                        list_item["times"],
-                    ),
+                    Booking(list_item["user_id"],list_item["date"],list_item["times"],list_item["id"])
                 )
             )
         booking_list.sort(key=lambda x: x[0])
         return booking_list
 
-    def create_booking(self, new_booking: Booking) -> None:
+    def create_booking(self, new_booking: Booking) -> Booking:
         json_data = self._load()
+        json_bookings = json_data["bookings"]
 
-        exsting_id = [
-            b["booking_id"] for b in json_data["bookings"] if "booking_id" in b
-        ][-1] + 1
+        for json_booking in json_bookings:
+            
+            if (json_booking["date"] == new_booking.date and json_booking["user_id"] == new_booking.user_id):
+                
+                json_booking["times"].extend(new_booking.times)
+                json_booking["times"] = self._normalize_times(json_booking["times"])
+                self._write(json_data)
 
-        booking_obj: RawBooking = {
-            "booking_id": exsting_id,
+                return Booking(json_booking["user_id"], json_booking["date"], list(json_booking["times"]), json_booking["id"])
+
+        next_id = max((b.get("id", 0) for b in json_bookings), default=0) + 1
+        booking: RawBooking = {
+            "id": next_id,
             "user_id": new_booking.user_id,
             "date": new_booking.date,
-            "times": list(new_booking.times),
+            "times": self._normalize_times(list(new_booking.times)),
         }
-
-        for json_booking in json_data["bookings"]:
-
-            if (
-                json_booking["date"] == booking_obj["date"]
-                and json_booking["user_id"] == booking_obj["user_id"]
-            ):
-                json_booking["times"].extend(booking_obj["times"])
-                break
-        else:
-            json_data["bookings"].append(booking_obj)
-
-        for json_booking in json_data["bookings"]:
-            json_booking["times"] = self._normalize_times(json_booking["times"])
-
+        
+        json_bookings.append(booking)
         self._write(json_data)
+        return Booking(booking["user_id"],booking["date"],list(booking["times"]),booking["id"])
+
+
+

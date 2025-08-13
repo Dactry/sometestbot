@@ -11,6 +11,7 @@ from ports.bookings_port import BookingRepository
 
 
 class RawBooking(TypedDict):
+    booking_id: int
     user_id: int
     date: str
     times: list[str]
@@ -28,6 +29,7 @@ class RawData(TypedDict):
 
 
 class JsonBookingRepository(BookingRepository):
+
     def __init__(self, path: str):
         base = Path(__file__).resolve().parent
         self._path = (base / path).resolve()
@@ -61,7 +63,7 @@ class JsonBookingRepository(BookingRepository):
                 json.dump(incoming_data, f, ensure_ascii=False, indent=2)
                 f.flush()
                 os.fsync(f.fileno())
-            os.replace(tmp_path, self._path)  # атомарне перейменування
+            os.replace(tmp_path, self._path)
         finally:
             try:
                 if os.path.exists(tmp_path):
@@ -142,6 +144,7 @@ class JsonBookingRepository(BookingRepository):
             else:
                 sorted_list.append(
                     {
+                        "booking_id": data_booking["booking_id"],
                         "user_id": data_booking["user_id"],
                         "date": data_booking["date"],
                         "times": list(data_booking["times"]),
@@ -157,7 +160,9 @@ class JsonBookingRepository(BookingRepository):
                 (
                     list_item["user_id"],
                     Booking(
-                        list_item["user_id"], list_item["date"], list_item["times"]
+                        list_item["user_id"],
+                        list_item["date"],
+                        list_item["times"],
                     ),
                 )
             )
@@ -167,13 +172,19 @@ class JsonBookingRepository(BookingRepository):
     def create_booking(self, new_booking: Booking) -> None:
         json_data = self._load()
 
+        exsting_id = [
+            b["booking_id"] for b in json_data["bookings"] if "booking_id" in b
+        ][-1] + 1
+
         booking_obj: RawBooking = {
+            "booking_id": exsting_id,
             "user_id": new_booking.user_id,
             "date": new_booking.date,
             "times": list(new_booking.times),
         }
 
         for json_booking in json_data["bookings"]:
+
             if (
                 json_booking["date"] == booking_obj["date"]
                 and json_booking["user_id"] == booking_obj["user_id"]
@@ -187,12 +198,3 @@ class JsonBookingRepository(BookingRepository):
             json_booking["times"] = self._normalize_times(json_booking["times"])
 
         self._write(json_data)
-
-
-JsonBookingRepository("bookings.json").create_booking(
-    Booking(1, "2025-08-12", ["08:10", "09:00", "11:00", "12:00"])
-)
-newBooking = JsonBookingRepository("bookings.json")
-newBooking.create_booking(Booking(1, "2025-08-12", ["18:00", "11:00", "12:00"]))
-print(newBooking)
-# print(JsonBookingRepository("bookings.json").list_bookings_for_date("2025-08-12"))
